@@ -54,7 +54,7 @@ scene time =
         ( zero
             :| ( fold
                   ( map (\f -> f time)
-                      [ atT 0.0 $ ep "a" q 1.0 0.0 ]
+                      [ atT 0.0 $ ep "a" 20.0 1.0 0.0 ]
                   )
               )
         )
