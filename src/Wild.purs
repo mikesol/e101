@@ -76,7 +76,7 @@ main =
         let
           rampsM =
             map
-              (\(Tuple l r) -> (Tuple (l + 0.03) 0.0))
+              (\(Tuple l r) -> (Tuple ((l * 0.5) + 0.03) (r `pow` 2.0)))
               ramps
         pure (scene (aggT rampsM).acc (aggT ratesM).acc)
     , buffers =
