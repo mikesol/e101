@@ -11,7 +11,7 @@ import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (D2)
 import Data.Vec ((+>), empty)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioParameter, AudioUnit, EngineInfo, constant_, convolver, convolver_, evalPiecewise, g'add_, g'delay_, g'gain_, gainT_, gainT_', gain_, gain_', graph_, highpass_, makePeriodicWave, pannerMonoT_, pannerMono_, panner_, periodicOsc_, playBufWithOffset_, runInBrowser, speaker')
+import FRP.Behavior.Audio (AudioParameter, AudioUnit, EngineInfo, constant_, convolver_, evalPiecewise, g'add_, g'delay_, g'gain_, gainT_, gainT_', gain_, gain_', graph_, highpass_, makePeriodicWave, pannerMonoT_, pannerMono_, panner_, periodicOsc_, playBufWithOffset_, runInBrowser, speaker')
 import Foreign.Object as O
 import Math (cos, pi, pow, sin, (%))
 import Record.Extra (SLProxy(..), SNil)
