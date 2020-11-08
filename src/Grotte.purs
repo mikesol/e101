@@ -2,21 +2,33 @@ module E101.Grotte where
 
 import Prelude
 import Data.Array (mapWithIndex)
+import Data.Foldable (traverse_)
 import Data.Int (toNumber)
 import Data.List (List(..), fold, (:))
+import Data.Newtype (wrap)
 import Data.NonEmpty ((:|))
 import Data.Profunctor (lcmap)
+import Data.Set (isEmpty)
 import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (D2)
 import Data.Vec ((+>), empty)
-import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioParameter, AudioUnit, EngineInfo, constant_, convolver_, evalPiecewise, g'add_, g'delay_, g'gain_, gainT_, gainT_', gain_, gain_', graph_, highpass_, makePeriodicWave, pannerMonoT_, pannerMono_, panner_, periodicOsc_, playBufWithOffset_, runInBrowser, speaker')
+import Effect (Effect)
+import Effect.Ref as Ref
+import FRP.Behavior (Behavior, behavior)
+import FRP.Behavior.Audio (AudioParameter, AudioUnit, EngineInfo, constant_, convolver_, evalPiecewise, g'add_, g'delay_, g'gain_, gainT_, gainT_', gain_, gain_', graph_, highpass_, makePeriodicWave, pannerMonoT_, pannerMono_, panner_, periodicOsc_, playBufWithOffset_, runInBrowser_, speaker')
+import FRP.Behavior.Mouse (buttons)
+import FRP.Event (Event, makeEvent, subscribe)
+import FRP.Event.Mouse (Mouse, getMouse)
 import Foreign.Object as O
 import Math (cos, pi, pow, sin, (%))
 import Record.Extra (SLProxy(..), SNil)
 import Type.Data.Graph (type (:/))
 import Type.Klank.Dev (Klank, defaultEngineInfo, klank, makeBuffersKeepingCache)
+import Web.Event.EventTarget (addEventListener, eventListener, removeEventListener)
+import Web.HTML (window)
+import Web.HTML.Window (toEventTarget)
+import Web.TouchEvent.TouchEvent (fromEvent)
 
 engineInfo =
   defaultEngineInfo
@@ -215,41 +227,53 @@ jh tag rg pn =
       )
 
 onsets =
-  [ Tuple 1.200000 gesture2
-  , Tuple 1.500000 gesture10
-  , Tuple 2.300000 gesture6
-  , Tuple 3.400000 gesture12
-  , Tuple 3.600000 gesture9
-  , Tuple 4.300000 gesture2
-  , Tuple 7.600000 gesture1
-  , Tuple 8.250000 gesture7
-  , Tuple 8.400000 gesture6
-  , Tuple 8.800000 gesture8
-  , Tuple 8.900000 gesture3
-  , Tuple 9.000000 gesture13
-  , Tuple 9.100000 gesture1
-  , Tuple 9.800000 gesture3
-  , Tuple 11.000000 gesture1
-  , Tuple 13.000000 gesture6
-  , Tuple 16.000000 gesture13
-  , Tuple 18.000000 gesture10
-  , Tuple 18.300000 gesture3
-  , Tuple 18.400000 gesture0
-  , Tuple 18.500000 gesture3
-  , Tuple 18.550000 gesture2
-  , Tuple 18.600000 gesture4
-  , Tuple 18.700000 gesture2
-  , Tuple 18.900000 gesture11
-  , Tuple 19.100000 gesture0
-  , Tuple 19.500000 gesture12
-  , Tuple 20.500000 gesture6
+  [ Tuple 0.000000 gesture8
+  , Tuple 0.426276 gesture0
+  , Tuple 0.819423 gesture2
+  , Tuple 1.732701 gesture12
+  , Tuple 2.571557 gesture0
+  , Tuple 3.477787 gesture3
+  , Tuple 3.828969 gesture10
+  , Tuple 3.854746 gesture9
+  , Tuple 4.012926 gesture1
+  , Tuple 5.007404 gesture13
+  , Tuple 5.078784 gesture8
+  , Tuple 5.836702 gesture6
+  , Tuple 6.353655 gesture10
+  , Tuple 6.810465 gesture9
+  , Tuple 7.113747 gesture10
+  , Tuple 7.220381 gesture12
+  , Tuple 8.152244 gesture4
+  , Tuple 8.455856 gesture5
+  , Tuple 9.332234 gesture8
+  , Tuple 10.146285 gesture8
+  , Tuple 10.661256 gesture7
+  , Tuple 10.872119 gesture3
+  , Tuple 11.238173 gesture2
+  , Tuple 11.492486 gesture2
+  , Tuple 12.431574 gesture9
+  , Tuple 12.992378 gesture7
+  , Tuple 13.342822 gesture11
+  , Tuple 13.564065 gesture7
+  , Tuple 14.339683 gesture10
+  , Tuple 15.217516 gesture11
+  , Tuple 15.735990 gesture6
+  , Tuple 16.142573 gesture8
+  , Tuple 17.097634 gesture1
+  , Tuple 17.262141 gesture5
+  , Tuple 17.442298 gesture4
+  , Tuple 17.618020 gesture8
+  , Tuple 17.941086 gesture11
+  , Tuple 18.324842 gesture12
+  , Tuple 18.477431 gesture3
+  , Tuple 18.738520 gesture2
   ] ::
     Array (Tuple Number (Tuple Number Number))
 
-birds :: Number -> AudioUnit D2
-birds time =
+birds :: Boolean -> Number -> AudioUnit D2
+birds gate time =
   convolver_ "birdsConv" "verb3"
-    ( gain_ "birdsMaster" 1.0
+    ( gain_ "birdsMaster" (if gate then 1.0 else 0.0)
         ( zero
             :| fold
                 ( map (\f -> f time)
@@ -268,18 +292,26 @@ birds time =
         )
     )
 
-scene :: Number -> Behavior (AudioUnit D2)
-scene time =
-  pure
-    $ speaker'
-        ( background time
-            + birds time
-        )
+scene :: Mouse -> Touch -> Number -> Behavior (AudioUnit D2)
+scene mouse touch time = f <$> click <*> (touching touch)
+  where
+  f c t =
+    speaker'
+      ( background time
+          + birds (c || t) time
+      )
+
+  click :: Behavior Boolean
+  click = map (not <<< isEmpty) $ buttons mouse
 
 main :: Klank
 main =
   klank
-    { run = runInBrowser scene
+    { run =
+      runInBrowser_ do
+        mouse <- getMouse
+        touch <- getTouch
+        pure (scene mouse touch)
     , buffers =
       makeBuffersKeepingCache
         [ Tuple "background" "https://klank-share.s3-eu-west-1.amazonaws.com/e101/test/overtonez.ogg"
@@ -295,3 +327,50 @@ main =
             (0.2 +> 0.1 +> 0.01 +> -0.03 +> -0.1 +> empty)
         res $ O.singleton "smooth" pw
     }
+
+newtype Touch
+  = Touch
+  { inTouch :: Ref.Ref (Boolean)
+  , dispose :: Effect Unit
+  }
+
+-- | Get a handle for working with the mouse.
+getTouch :: Effect Touch
+getTouch = do
+  inTouch <- Ref.new false
+  target <- toEventTarget <$> window
+  touchStartListener <-
+    eventListener \e -> do
+      fromEvent e
+        # traverse_ \me ->
+            Ref.write (true) inTouch
+  touchEndListener <-
+    eventListener \e -> do
+      fromEvent e
+        # traverse_ \me ->
+            Ref.write (false) inTouch
+  addEventListener (wrap "touchstart") touchStartListener false target
+  addEventListener (wrap "touchend") touchEndListener false target
+  let
+    dispose = do
+      removeEventListener (wrap "touchstart") touchStartListener false target
+      removeEventListener (wrap "touchend") touchEndListener false target
+  pure (Touch { inTouch, dispose })
+
+-- | Create an event which also returns the current mouse buttons.
+withTouch ::
+  forall a.
+  Touch ->
+  Event a ->
+  Event { value :: a, inTouch :: Boolean }
+withTouch (Touch { inTouch }) e =
+  makeEvent \k ->
+    e
+      `subscribe`
+        \value -> do
+          touchValue <- Ref.read inTouch
+          k { value, inTouch: touchValue }
+
+-- | A `Behavior` which reports the mouse buttons which are currently pressed.
+touching :: Touch -> Behavior (Boolean)
+touching m = behavior \e -> map (\{ value, inTouch: bs } -> value bs) (withTouch m e)
