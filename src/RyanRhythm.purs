@@ -3,16 +3,16 @@ module Klank.Dev where
 import Prelude
 import Data.Array (range)
 import Data.Int (toNumber)
-import Data.List ((:), List(..))
+import Data.List (List(..))
 import Data.NonEmpty ((:|))
 import Data.Ord (abs)
 import Data.Tuple (Tuple(..))
 import Data.Typelevel.Num (D1)
 import Effect.Class (liftEffect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, Oversample(..), audioWorkletProcessor, bandpass, constant, gain', loopBuf, makeFloatArray, microphone, playBuf, playBufWithOffset, runInBrowser, sinOsc, speaker, waveShaper)
+import FRP.Behavior.Audio (AudioUnit, Oversample(..), loopBuf, makeFloatArray, runInBrowser, speaker, waveShaper)
 import Foreign.Object as O
-import Math (pi, sin)
+import Math (pi)
 import Type.Klank.Dev (Klank, affable, klank, makeBuffersKeepingCache)
 
 makeDistortionCurve :: Number -> Array Number
