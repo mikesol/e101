@@ -1,7 +1,6 @@
 module E101.Election where
 
 import Prelude
-import Data.Array (range)
 import Data.Int (toNumber)
 import Data.List (List(..), fold)
 import Data.NonEmpty ((:|))
