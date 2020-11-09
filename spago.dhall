@@ -12,6 +12,7 @@ You can edit this file as you like.
   , "effect"
   , "psci-support"
   , "typelevel-klank-dev"
+  , "web-touchevents"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs" ]

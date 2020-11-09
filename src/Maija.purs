@@ -1,4 +1,4 @@
-module E101.Election where
+module E101.Maija where
 
 import Prelude
 import Data.Int (toNumber)
