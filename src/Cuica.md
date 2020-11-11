@@ -1,14 +1,14 @@
-In this article, I'm going to teach you how to build the instrument you see above on klank.dev.
+{% youtube sZfJluQzamM %}
 
-tl;dr. Click [here] from mobile Firefox to play the instrument and [here] to see the code.
+In this article, I'll show you how I built the instrument you see above on klank.dev. The whole thing is just 250 lines of PureScript. You can click [here](https://link.klank.dev/6uEh7kup1XtW7q5RA) from mobile Firefox to play the instrument and [here](https://link.klank.dev/vJFCfbU3Fd75CQVe8) to run the code in klank.
 
-[klank.dev](https://klank.dev) is a PureScript sandbox for interactive animations and audio. It uses a technique called Functional Reactive Programming to blend together realtime input like touch events and the microphone.
+[klank.dev](https://klank.dev) is a PureScript sandbox for interactive animations and audio. It uses a technique called Functional Reactive Programming, and more specifically the [Behavior](https://github.com/paf31/purescript-behaviors) pattern, to turn a phone, tablet or comptuer into a musical instrument.
 
-This article proceeds in small steps, adding new parts of the instrument in each example. Links to full-working examples are provided along the way.
+This article explores small snippets from the larger klank, showing how each one adds up to the full instrument.
 
 ## Before you begin
 
-While we'll be using klank.dev as our editor, if you'd like to experiment with the code, I'd recommend using an industrial editor like vim or VSCode. In VSCode (which I use), you can download the [purescript-ide-extension](). Also, you'll need to install `purescript` and `spago`, which can be done like so:
+While we'll be using klank.dev as our editor, if you'd like to experiment with the code, I'd recommend using an industrial editor like vim or VSCode. In VSCode (which I use), you can download the [`vscode-ide-purescript` Extension](https://github.com/nwolverson/vscode-ide-purescript). Also, you'll need to install `purescript` and `spago`, which can be done like so:
 
 ```bash
 npm install -g purescript spago
@@ -16,103 +16,208 @@ npm install -g purescript spago
 
 If you're just following along and making minor tweaks, on the other hand, developing directly in klank.dev is fine.
 
-## Starting with a loop
+## The main cuica loop
 
-We'll start with a looped sound, which will give us the opportunity to explore how a klank is organized from top to bottom.
+The main cuica loop is on line 95: `(loopBuf "cuica" 1.0 0.0 0.0)`. It is duplicated using the `dup2` function so that the same loop can be fed to multiple parts of the audio graph, which speeds up computation.
 
-All klanks have a `scene` - in this case, our loop - that is passed to either `runInBrowser` for pure scenes and `runInBrowser_` for scenes with effectful input like a mouse, MIDI, or touch.
-
-Our scene is a function of time, but for now we do not use the time parameter. We just loop a sound. `1.0` corresponds to the playback rate, `0.0` to the start position in the file in seconds, and `0.0` to the end position _or_ the full file length if equal to `0.0` (which is the case here).
+The buffer `"cuica"`, along with all of the other buffers, are downloaded using `makeBuffersKeepingCache`. This caches files in the current session for future use. Without this, the file would be downloaded every time you press play.
 
 ```haskell
-scene time = pure (speaker' $ loopBuf "cuica" 1.0 0.0 0.0)
+main :: Klank' (TouchAccumulator)
+main =
+  klank
+    {
+    -- other stuff
+    buffers =
+      makeBuffersKeepingCache
+        [ Tuple "cuica" "https://klank-share.s3-eu-west-1.amazonaws.com/e101/test/ryanCuica.ogg"
+        , Tuple "bali" "https://freesound.org/data/previews/257/257625_3932570-lq.mp3"
+        , Tuple "tongue" "https://klank-share.s3-eu-west-1.amazonaws.com/in-a-sentimental-mood/Samples/TongueDrum/Mallet-A2_1.ogg"
+        ]
+    }
 ```
 
-The buffer `"cuica"` is downloaded using `makeBuffersKeepingCache` in the main function, which caches files in the current session for future use. Without this, the file would be downloaded every time you press play.
+> Cuica is actually my friend [Ryan Veillet](https://www.facebook.com/ryan.veillet) doing an improvisation with his voice! But it sounds like a cuica to me, so I call it cuica :)
 
-> Cuica is actually my friend [Ryan Veillet]() doing an improvisation with his voice! But it sounds like a cuica to me, so I call it cuica :)
+To listen to the original "cuica" on klank.dev, you can check out [this link](https://link.klank.dev/56aVzqSdqShH4c2e8).
 
-The full example is below, and you can listen to it [here]().
+## Adding an accompaniment
+
+In the klank, we accompany the cuica sound with periodic oscillator whose volume is modulated by the input volume of the cuica. We also use Balinese bells in a loop to add depth and richness to the sound.
 
 ```haskell
-
+( gain_ "cuicaGain" 1.0
+    ( pannerMono 0.0 (periodicOsc "smooth" (900.0 + 200.0 * sin (time * pi * 0.2)))
+        :| (gain_' "bli" 2.0 (loopBuf_ "bali" "bali" 1.0 0.0 0.0))
+        : Nil
+    )
+)
+* audioWorkletProcessor_ "wp-cuica"
+    "klank-amplitude"
+    O.empty
+    d
 ```
 
-## Adding two oscillators
+The multiplication operation between the audio worklet and the oscillator multiplies the two singlas together, which in this case multiplies the accompaniment by the amplitude of the voice.
 
-Let's add two periodic oscillators. They'll be pretty boring and static for now, but we'll spice them up later on.
-
-[Periodic oscillators]() are defined using vectors that describe the coefficients of real and imaginary parts of an oscillator's harmonics. The real part effects the amplitude or loudness, whereas the imaginary part effects the phase. Harmonics with different phase relationships have create surprisingly different results!
-
-In this example, I define one periodic oscillator called `"smooth"` and use it in the scene with a small volume adjustment. You can listen [here]().
-
-```haskell
-
-```
-
-## Using the loop to modulate the oscillators
-
-Let's now use the vocal loop to control the gain of the oscillators. This can be done by multiplying the oscillators by the amplitude, or loudness, of the loop.
-
-To get the loudness of the loop, we need to create a custom [audio worklet](). Audio worklets are JavaScript or WebAssembly classes that process sound in 128-frame chunks. Because they need to operate at the audio rate, they should have as little processing as possible. In my worklet, I take the input sound and average together the absolute value of all 128 frames. This is a good proxy for the sound's amplitude.
-
-The full JS amplitude tracking worklet is below:
+The `audioWorkletProcessor_` uses a custom audio worklet for amplitude tracking. The full worklet is quite short, and just averages together the absolute value of 128 audio frames, which at a sample rate of 44100 Hz is a good proxy for amplitude.
 
 ```javascript
+// amplitude.js
+class AmplitudeProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.prev = new Array(10).fill(0.0);
+  }
+  process(inputs, outputs) {
+    const input = inputs[0];
+    const output = outputs[0];
+    for (var j = 0; j < Math.min(input.length, output.length); j++) {
+      var ichannel = input[j];
+      var ochannel = output[j];
+      var amp = 0.0;
+      for (var i = 0; i < ichannel.length; i++) {
+        amp += Math.abs(ichannel[i]);
+      }
+      amp /= ichannel.length ? ichannel.length : 1.0;
+      for (var i = 0; i < ochannel.length; i++) {
+        ochannel[i] = (this.prev[j] * (127 - i) + amp * i) / 127.0;
+      }
+      this.prev[j] = amp;
+    }
+    return true;
+  }
+}
 
+registerProcessor("klank-amplitude", AmplitudeProcessor);
 ```
 
-You can use klank.dev to upload a worklet to the cloud, or you can stash it wherever you'd like. Then, from your session, you can use it in like this:
+## Creating a slight echo
+
+The echo effect you hear comes from the graph unit, which is used to create a feedback loop.
 
 ```haskell
-
+graph
+    { aggregators:
+        { out: Tuple (g'add_ "gout") (SLProxy :: SLProxy ("combine" :/ SNil))
+        , combine: Tuple (g'add_ "ga") (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
+        , gain: Tuple (g'gain_ "gg" 0.3) (SLProxy :: SLProxy ("del" :/ SNil))
+        }
+    , processors:
+        { del: Tuple (g'delay_ "gd" 0.2) (SProxy :: SProxy "combine")
+        }
+    , generators:
+        { mic:
+            ( ( gain_ "cuicaGain" 1.0
+                    ( pannerMono 0.0 (periodicOsc "smooth" (900.0 + 200.0 * sin (time * pi * 0.2)))
+                        :| (gain_' "bli" 2.0 (loopBuf_ "bali" "bali" 1.0 0.0 0.0))
+                        : Nil
+                    )
+                )
+                * audioWorkletProcessor_ "wp-cuica"
+                    "klank-amplitude"
+                    O.empty
+                    d
+            )
+        }
+    }
 ```
 
-Now that we have our worklet imported, we can use it to measure the amplitude of the cuica loop and modulate the amplitude of the oscillators with the output. Because we have several oscillators, we use the `dup2` function, which reuses an arbitrary input (in this case, our loop buffer and our amplitude tracker) instead of instantiating a new one. Reusing audio units is a good way to keep processing time down and avoid nasty skips and pops.
-
-The full example is below, and you can listen to it [here].
-
-## Chaging the oscillator pitch over time
-
-Let's now change our upper oscillator subtly over time. To my ear, this gives the cuica an odd, mystical quality.
-
-Our scene has a `time` parameter that we haven't used yet. Now let's use it! The only modification we need to make in our example is changing the pitch of the oscillators as a function of time. We'll use a sine wave with a period of once every five seconds, which is slightly longer than the looped sound. This will ensure that the upper oscillator is always subtly different when it returns to the loop.
-
-The full example can be heard here and is below as well:
-
-```haskell
-
-```
-
-## Adding feedback
-
-## Adding an additional recording to the mix
-
-By now, something about this sound evokes the sound of the Balinese Gamelan. I'd like to add just a hint of gamelan bells, and I'll do that by using the same amplitude tracker to gate a loop of a balinese orchestra that I grabbed from freesound.org. The full example is below and can be heard [here].
-
-```haskell
-
-```
+Here, `mic` is fed to `combine`, which is then fed to the delay line `del`, which goes to a gain less than `1.0` and then `combine` again. The result is the decaying echo you hear.
 
 ## Using touch/mouse input to trigger a tongue drum
 
-Now it's time to make the example interactive. We'll do this by adding touch events, and as we're building the example on the computer, we'll substitute in mouse events instead of touch events for non-mobile interaction.
+The code below turns discrete touch events into a behavior. The touch events are first transformed into an event, which is then turned into a `Behavior` using the `behavior` function. This is incorporated into the audio scene on line 77.
 
-The full example is below and can be found [here] for mobile and [here] for desktop.
+```haskell
+type TouchOnset
+  = Array
+      { id :: Int
+      , x :: Number
+      , y :: Number
+      }
+
+newtype Touch
+  = Touch
+  { touches :: Ref.Ref (TouchOnset)
+  , dispose :: Effect Unit
+  }
+
+handleTE :: Int -> Ref.Ref (TouchOnset) -> TouchEvent -> Effect Unit
+handleTE i ref te = do
+  let
+    ts = changedTouches te
+  let
+    l = TL.length ts
+  let
+    tlist = map (\t -> { id: i, x: toNumber $ T.clientX t, y: toNumber $ T.clientY t }) (catMaybes $ map (\x -> TL.item x ts) (range 0 (l - 1)))
+  void $ Ref.modify (\ipt -> tlist <> ipt) ref
+
+getTouch :: Effect Touch
+getTouch = do
+  nTouches <- Ref.new 0
+  touches <- Ref.new []
+  target <- toEventTarget <$> window
+  touchStartListener <-
+    eventListener \e -> do
+      fromEvent e
+        # traverse_ \me -> do
+            nt <- Ref.modify (_ + 1) nTouches
+            handleTE nt touches me
+  addEventListener (wrap "touchstart") touchStartListener false target
+  let
+    dispose = do
+      removeEventListener (wrap "touchstart") touchStartListener false target
+  pure (Touch { touches, dispose })
+
+withTouch ::
+  forall a.
+  Touch ->
+  Event a ->
+  Event { value :: a, touches :: TouchOnset }
+withTouch (Touch { touches }) e =
+  makeEvent \k ->
+    e
+      `subscribe`
+        \value -> do
+          touchValue <- Ref.read touches
+          k { value, touches: touchValue }
+
+touching :: Touch -> Behavior (TouchOnset)
+touching m = behavior \e -> map (\{ value, touches: bs } -> value bs) (withTouch m e)
+```
 
 ## Showing touch/mouse interaction on the canvas
 
 Let's paint the canvas so that we have an easier time seeing where our drum's pitches fall.
 
-The full example is below and can be found [here] for mobile and [here] for desktop.
+```haskell
+kos :: Int -> M.Map Int TouchAccumulatorSingleton -> Number -> Int
+kos i m n = maybe 0 (\v -> floor $ 20.0 * (min 1.0 (n - v.t))) (M.lookup i m)
 
-## Adding a voice-controlled pad
+---
 
-The last bit we'll add is a warm pad that gets louder when the microphone input is louder. We'll set the pitch to the same pitch as the bells, and we'll sing in the same scale as the bells to create a unified harmony throughout the instrument.
+( fold
+    ( map
+        ( \i ->
+            filled
+            ( fillColor case i of
+                0 -> (rgb 23 (67 + kos i keys time) 189)
+                1 -> (rgb (89 + kos i keys time) 67 89)
+                2 -> (rgb 23 167 (29 + kos i keys time))
+                3 -> (rgb (200 + kos i keys time) 35 65)
+                4 -> (rgb 203 (210 + kos i keys time) 190)
+                _ -> (rgb 23 67 189)
+            )
+            ( rectangle 0.0 ((ci.h * toNumber i) / 5.0) ci.w (ci.h / 5.0)
+            )
+        )
+        (range 0 4)
+    )
+)
+```
 
-To do this, we'll use the same amplitude tracking strategy as before, except this time it will be with the microphone instead of the buffer. As we sing louder, the harmonic pad will get louder. We'll also use a slightly simpler oscillator with more instances to create an overtone effect.
-
-The final full example is below and can be found [here] for mobile and [here] for desktop.
+The code above colors the keyboard using the five different `rgb` values, and `kos` measures if a key is being played or not. If so, it changes the `rgb` value subtly over one second by subtracting the current time from the onset time (`n - v.t`).
 
 ## Conclusion
 
