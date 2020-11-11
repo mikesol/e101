@@ -40,6 +40,8 @@ import Web.HTML.Window (toEventTarget)
 import Web.TouchEvent.Touch as T
 import Web.TouchEvent.TouchEvent (TouchEvent, changedTouches, fromEvent, touches)
 import Web.TouchEvent.TouchList as TL
+import Web.UIEvent.MouseEvent (MouseEvent, clientX)
+import Web.UIEvent.MouseEvent as ME
 
 conv440 :: Number -> Number
 conv440 i = 440.0 * (2.0 `pow` (i / 12.0))
@@ -216,6 +218,14 @@ handleTE i ref te = do
     tlist = map (\t -> { id: i, x: toNumber $ T.clientX t, y: toNumber $ T.clientY t }) (catMaybes $ map (\x -> TL.item x ts) (range 0 (l - 1)))
   void $ Ref.modify (\ipt -> tlist <> ipt) ref
 
+handleM :: Int -> Ref.Ref (TouchOnset) -> MouseEvent -> Effect Unit
+handleM i ref me = do
+  let
+    x = clientX me
+  let
+    y = clientX me
+  void $ Ref.modify (\ipt -> [ { id: i, x: toNumber x, y: toNumber y } ] <> ipt) ref
+
 -- | Get a handle for working with the mouse.
 getTouch :: Effect Touch
 getTouch = do
@@ -228,10 +238,18 @@ getTouch = do
         # traverse_ \me -> do
             nt <- Ref.modify (_ + 1) nTouches
             handleTE nt touches me
+  mouseDownListener <-
+    eventListener \e -> do
+      ME.fromEvent e
+        # traverse_ \me -> do
+            nt <- Ref.modify (_ + 1) nTouches
+            handleM nt touches me
   addEventListener (wrap "touchstart") touchStartListener false target
+  addEventListener (wrap "mousedown") mouseDownListener false target
   let
     dispose = do
       removeEventListener (wrap "touchstart") touchStartListener false target
+      removeEventListener (wrap "mousedown") mouseDownListener false target
   pure (Touch { touches, dispose })
 
 -- | Create an event which also returns the current mouse buttons.
