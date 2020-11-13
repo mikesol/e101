@@ -19,15 +19,6 @@ import Record.Extra (SLProxy(..), SNil)
 import Type.Data.Graph (type (:/))
 import Type.Klank.Dev (Klank, defaultEngineInfo, klank, makeBuffersKeepingCache)
 
-atT :: forall a. Number -> (Number -> a) -> (Number -> a)
-atT t = lcmap (_ - t)
-
-conv440 :: Int -> Number
-conv440 i = 440.0 * (2.0 `pow` ((toNumber $ 0 + i) / 12.0))
-
-boundPlayer :: forall a. Number -> (Number -> List a) -> Number -> List a
-boundPlayer len a time = if (time) + kr >= 0.0 && time < (len) then a time else Nil
-
 kr = (toNumber defaultEngineInfo.msBetweenSamples) / 1000.0 :: Number
 
 epwf :: Array (Tuple Number Number) -> Number -> AudioParameter
